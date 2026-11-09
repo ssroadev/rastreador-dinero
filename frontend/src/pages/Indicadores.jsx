@@ -4,6 +4,7 @@ import { getIndicadores } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 
 /* ── Formato ──────────────────────────────────────────────────────────────────── */
 const fmtInt  = (n) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 });
@@ -50,7 +51,7 @@ function InsightRow({ label, value, bar, barColor = 'var(--accent)' }) {
 }
 
 export default function Indicadores() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());  // Llamar a la función
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

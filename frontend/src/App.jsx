@@ -3,10 +3,10 @@ import Sidebar     from './components/Navbar';
 import Indicadores  from './pages/Indicadores';
 import Evolucion    from './pages/Evolucion';
 import ComisionesHora from './pages/ComisionesHora';
-import TopBloques   from './pages/TopBloques';
-import Distribucion from './pages/Distribucion';
+import Ballenas     from './pages/Ballenas';
+import Fragmentacion from './pages/Fragmentacion';
 import Atipicas     from './pages/Atipicas';
-import Mensual      from './pages/Mensual';
+import Concentracion from './pages/Concentracion';
 import ConsultaNL   from './pages/ConsultaNL';
 import TiempoReal   from './pages/TiempoReal';
 import './App.layout.css';
@@ -47,10 +47,10 @@ export default function App() {
             <Route path="/"             element={<Indicadores />} />
             <Route path="/evolucion"    element={<Evolucion />} />
             <Route path="/comisiones"   element={<ComisionesHora />} />
-            <Route path="/bloques"      element={<TopBloques />} />
-            <Route path="/distribucion" element={<Distribucion />} />
-            <Route path="/atipicas"     element={<Atipicas />} />
-            <Route path="/mensual"      element={<Mensual />} />
+            <Route path="/ballenas"      element={<Ballenas />} />
+            <Route path="/fragmentacion" element={<Fragmentacion />} />
+            <Route path="/atipicas"      element={<Atipicas />} />
+            <Route path="/concentracion" element={<Concentracion />} />
             <Route path="/nl"           element={<ConsultaNL />} />
             <Route path="/tiempo-real"  element={<TiempoReal />} />
           </Routes>

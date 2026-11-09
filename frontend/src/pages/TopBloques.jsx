@@ -5,13 +5,14 @@ import { getTopBloques } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 import { tooltip, grid, xAxisCategory, yAxis, COLORS } from '../charts/chartTheme';
 
 const fmt  = (n, d = 6) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d });
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : '—';
 
 export default function TopBloques() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

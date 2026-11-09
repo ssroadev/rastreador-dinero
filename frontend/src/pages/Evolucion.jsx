@@ -5,6 +5,7 @@ import { getEvolucion } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 import { tooltip, grid, xAxisCategory, yAxis, lineSeries, COLORS, legend } from '../charts/chartTheme';
 
 const METRICS = {
@@ -15,7 +16,7 @@ const METRICS = {
 };
 
 export default function Evolucion() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

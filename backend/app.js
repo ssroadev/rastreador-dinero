@@ -47,7 +47,7 @@ async function iniciarChangeStream() {
             io.emit('nueva-transaccion', {
               txid:          doc.txid,
               fecha:         doc.fecha,
-              bloque_height: doc.bloque_height,
+              bloque:        doc.bloque,
               total_salida:  doc.total_salida,
               comision:      doc.comision,
               n_inputs:      doc.n_inputs,
@@ -67,11 +67,18 @@ async function iniciarChangeStream() {
           continue;
         }
 
-        // Error transitorio: backoff
+        // Code 50 (MaxTimeMSExpired) es normal — el cursor expira si no hay actividad
+        if (err?.code === 50) {
+          // Silencioso: reintenta sin log (es esperado en bases de datos sin tráfico nuevo)
+          await new Promise((r) => setTimeout(r, 5000));
+          continue;
+        }
+
+        // Otros errores transitorios: log + backoff
         console.warn(
-          `⚠ Change Stream interrumpido (code ${err?.code ?? 'n/a'}): ${err.message}. Reintentando en 3s…`
+          `⚠ Change Stream error (code ${err?.code ?? 'n/a'}): ${err.message}. Reintentando en 5s…`
         );
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 5000));
       }
     }
   })().catch(err => {

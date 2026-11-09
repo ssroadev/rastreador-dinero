@@ -5,6 +5,7 @@ import { getAtipicas } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 import { tooltip, COLORS } from '../charts/chartTheme';
 
 const fmt      = (n, d = 6) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d });
@@ -12,7 +13,7 @@ const truncate = (s, n = 16) => s ? (s.length > n ? s.slice(0, n) + '…' : s) :
 const fmtTs    = (d) => d ? new Date(d).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export default function Atipicas() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -28,7 +29,7 @@ export default function Atipicas() {
   useEffect(() => { cargar(); }, []);
 
   const filtered = search
-    ? data.filter(d => d.txid?.includes(search) || String(d.bloque_height).includes(search))
+    ? data.filter(d => d.txid?.includes(search) || String(d.bloque).includes(search))
     : data;
 
   const scatterOpt = {
@@ -131,7 +132,7 @@ export default function Atipicas() {
                     <tr key={i}>
                       <td><span className="mono" style={{ color: 'var(--accent)' }}>{truncate(d.txid, 18)}</span></td>
                       <td className="text-xs">{fmtTs(d.fecha)}</td>
-                      <td className="mono">#{fmt(d.bloque_height, 0)}</td>
+                      <td className="mono">#{fmt(d.bloque, 0)}</td>
                       <td className="mono font-semibold">{fmt(d.total_salida, 6)} ₿</td>
                       <td className="mono">{fmt(d.comision, 8)}</td>
                       <td className="mono text-xs" style={{ color: 'var(--text-tertiary)' }}>

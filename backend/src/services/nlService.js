@@ -11,17 +11,24 @@ Colección: transacciones
 Campos disponibles:
   - txid: string (hash de la transacción)
   - fecha: Date (timestamp UTC)
-  - bloque_height: number
+  - bloque: number
   - total_salida: number (BTC, suma de outputs)
   - comision: number (BTC)
   - n_inputs: number
   - n_outputs: number
   - tam_virtual: number (vbytes)
   - es_coinbase: boolean
+  - inputs: array de { dir: string, valor: number (BTC), tx_prev: string, idx_prev: number }
+  - outputs: array de { dir: string, valor: number (BTC), tipo: string, idx: number }
 
-Etapas permitidas: $match, $group, $sort, $limit, $project, $unwind, $bucket, $addFields, $count
-No se permiten: $out, $merge, $lookup, $graphLookup, $unionWith, ni operaciones de escritura.
-Devuelve SÓLO el array JSON del pipeline, sin explicaciones.
+Etapas permitidas: $match, $group, $sort, $limit, $project, $unwind, $bucket, $count
+No se permiten: $addFields, $function, $accumulator, $out, $merge, $lookup,
+  $graphLookup, $unionWith, $where, ni ninguna etapa de escritura.
+IMPORTANTE: En $match, el campo fecha es de tipo Date. Usa fechas ISO 8606
+  como strings (ej: "2026-11-01") en $gte/$lt y el servidor las convertirá
+  a Date automáticamente.
+Incluye siempre $limit al final (máx 1000 filas).
+Devuelve SÓLO el array JSON del pipeline, sin explicaciones ni código fence.
 `.trim();
 
 async function generarPipeline(pregunta) {

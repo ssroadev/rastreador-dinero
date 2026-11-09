@@ -36,20 +36,46 @@ const comisiones   = async (req, res, next) => {
   try { res.json(await service.comisiones(rango(req)));   } catch (e) { next(e); }
 };
 
-const topBloques   = async (req, res, next) => {
-  try { res.json(await service.topBloques(rango(req)));   } catch (e) { next(e); }
+const ballenas     = async (req, res, next) => {
+  try {
+    const minBtc = parseFloat(req.query.minBtc) || 10;
+    res.json(await service.ballenas(rango(req), minBtc));
+  } catch (e) { next(e); }
 };
 
-const distribucion = async (req, res, next) => {
-  try { res.json(await service.distribucion(rango(req))); } catch (e) { next(e); }
+const ballenasVivo = async (req, res, next) => {
+  try {
+    const limite = parseInt(req.query.limite) || 50;
+    const minBtc = parseFloat(req.query.minBtc) || 10;
+    if (limite < 1 || limite > 200) {
+      const e = new Error("'limite' debe estar entre 1 y 200"); e.status = 400; throw e;
+    }
+    res.json(await service.ballenasVivo(limite, minBtc));
+  } catch (e) { next(e); }
+};
+
+const fragmentacion = async (req, res, next) => {
+  try { res.json(await service.fragmentacion(rango(req))); } catch (e) { next(e); }
 };
 
 const atipicas     = async (req, res, next) => {
   try { res.json(await service.atipicas(rango(req)));     } catch (e) { next(e); }
 };
 
-const mensual      = async (req, res, next) => {
-  try { res.json(await service.mensual(rango(req)));      } catch (e) { next(e); }
+const concentracion = async (req, res, next) => {
+  try { res.json(await service.concentracion(rango(req))); } catch (e) { next(e); }
+};
+
+const distribucion = async (req, res, next) => {
+  try { res.json(await service.distribucion(rango(req))); } catch (e) { next(e); }
+};
+
+const mensual = async (req, res, next) => {
+  try { res.json(await service.mensual(rango(req))); } catch (e) { next(e); }
+};
+
+const topBloques = async (req, res, next) => {
+  try { res.json(await service.topBloques(rango(req))); } catch (e) { next(e); }
 };
 
 const ultimas      = async (req, res, next) => {
@@ -65,27 +91,21 @@ const ultimas      = async (req, res, next) => {
 };
 
 // ─── Lenguaje Natural ─────────────────────────────────────────────────────────
-// El frontend manda { pregunta } — el backend llama a la IA para generar el pipeline
+// El frontend manda { pregunta } — el backend llama a la IA para generar el
+// pipeline y lo valida antes de ejecutarlo. No se acepta pipeline del cliente.
 const consultaNL   = async (req, res, next) => {
   try {
-    const { pregunta, pipeline } = req.body;
-
-    // Si el cliente ya manda el pipeline generado (modo debug) lo ejecutamos directo
-    if (pipeline) {
-      if (!Array.isArray(pipeline)) {
-        const e = new Error("'pipeline' debe ser un array"); e.status = 400; throw e;
-      }
-      const resultado = await service.ejecutarNL(pipeline);
-      return res.json({ pipeline, resultado });
-    }
+    const { pregunta } = req.body;
 
     if (!pregunta || typeof pregunta !== 'string' || pregunta.trim().length < 3) {
       const e = new Error("Se requiere 'pregunta' como texto"); e.status = 400; throw e;
     }
 
-    // Genera pipeline con OpenAI (o similar) a través de un helper
+    // Genera pipeline con OpenAI a través del servicio de NL
     const { generarPipeline } = require('../services/nlService');
     const pipelineGenerado = await generarPipeline(pregunta.trim());
+
+    // El repositorio valida, sanitiza y ejecuta el pipeline
     const resultado = await service.ejecutarNL(pipelineGenerado);
     res.json({ pregunta: pregunta.trim(), pipeline: pipelineGenerado, resultado });
   } catch (e) { next(e); }
@@ -93,6 +113,7 @@ const consultaNL   = async (req, res, next) => {
 
 module.exports = {
   indicadores, evolucion, comisiones,
-  topBloques, distribucion, atipicas,
-  mensual, ultimas, consultaNL,
+  ballenas, ballenasVivo, fragmentacion,
+  atipicas, concentracion, distribucion,
+  mensual, topBloques, ultimas, consultaNL,
 };

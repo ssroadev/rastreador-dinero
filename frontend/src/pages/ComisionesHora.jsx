@@ -5,13 +5,14 @@ import { getComisionesHora } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 import { tooltip } from '../charts/chartTheme';
 
 const DIAS  = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const HORAS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}h`);
 
 export default function ComisionesHora() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

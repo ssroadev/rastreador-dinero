@@ -5,6 +5,7 @@ import { getDistribucion } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
+import { rangoPorDefecto } from '../utils/dates';
 import { tooltip, grid, xAxisCategory, yAxis, barSeries, COLORS, PALETTE } from '../charts/chartTheme';
 
 const fmt = (n, d = 2) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d });
@@ -17,7 +18,7 @@ function bucketLabel(rango, index) {
 }
 
 export default function Distribucion() {
-  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' });
+  const [filtro, setFiltro]   = useState(rangoPorDefecto());
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

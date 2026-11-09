@@ -186,7 +186,7 @@ export default function TiempoReal() {
                     </span>
                   </td>
                   <td className="text-xs mono">{fmtTs(tx.fecha)}</td>
-                  <td className="mono">#{fmt(tx.bloque_height, 0)}</td>
+                  <td className="mono">#{fmt(tx.bloque, 0)}</td>
                   <td className="mono font-semibold">{fmt(tx.total_salida, 6)} ₿</td>
                   <td className="mono">{fmt(tx.comision, 8)}</td>
                   <td className="mono text-xs" style={{ color: 'var(--text-tertiary)' }}>

@@ -1,11 +1,14 @@
 require('dotenv').config();
 const { app, server, iniciarChangeStream } = require('./app');
-const { conectar } = require('./src/config/db');
+const { conectar, asegurarMempoolVivo } = require('./src/config/db');
 
 const PORT = process.env.PORT || 3000;
 
 conectar()
-  .then(() => {
+  .then(async () => {
+    // Crea la colección capped mempool_vivo si no existe
+    await asegurarMempoolVivo();
+
     // Inicia el servidor HTTP
     server.listen(PORT, () => {
       console.log(`✓ API en http://localhost:${PORT}`);
