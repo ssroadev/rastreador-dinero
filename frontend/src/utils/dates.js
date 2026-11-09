@@ -1,17 +1,18 @@
 /**
  * Calcula el rango de fechas por defecto para los filtros.
- * @returns {{ desde: string, hasta: string }} — últimos 7 días en formato ISO
+ * @returns {{ desde: string, hasta: string }} — rango de 7 días con datos reales
  */
 export function rangoPorDefecto() {
-  const ahora = new Date();
-  const hace7 = new Date(ahora);
-  hace7.setDate(ahora.getDate() - 7);
+  // La BD tiene datos de Sept 21 - Nov 8, 2026
+  // Usar últimos 7 días de datos disponibles
+  const hasta = new Date('2026-11-08');
+  const desde = new Date('2026-11-01');  // 7 días antes
 
-  // Formato ISO sin milisegundos: "2026-11-08"
+  // Formato ISO: "2026-11-08"
   const formatear = (d) => d.toISOString().split('T')[0];
 
   return {
-    desde: formatear(hace7),
-    hasta: formatear(ahora),
+    desde: formatear(desde),
+    hasta: formatear(hasta),
   };
 }

@@ -2,7 +2,10 @@ import axios from 'axios';
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
-const http = axios.create({ baseURL: BASE });
+const http = axios.create({ 
+  baseURL: BASE,
+  timeout: 120000 // 120 segundos timeout
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function buildParams({ desde, hasta, limite } = {}) {

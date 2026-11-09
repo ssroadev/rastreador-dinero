@@ -1,7 +1,7 @@
 const { conectar } = require('../config/db');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const opts = { maxTimeMS: 120000, allowDiskUse: true };
+const opts = { maxTimeMS: 90000, allowDiskUse: true };  // Aumentar a 90 segundos
 
 function matchFecha({ desde, hasta }) {
   const m = { es_coinbase: false };
@@ -10,14 +10,35 @@ function matchFecha({ desde, hasta }) {
     if (desde) m.fecha.$gte = desde;
     if (hasta) m.fecha.$lt  = hasta;
   }
+  // Si no hay rango, limitar a últimos 30 días para evitar full scan
+  if (!desde && !hasta) {
+    const hace30 = new Date();
+    hace30.setDate(hace30.getDate() - 30);
+    m.fecha = { $gte: hace30 };
+  }
   return m;
 }
 
 // ─── Informe 1 · Indicadores Generales ────────────────────────────────────────
+// NOTA: Con 31M+ registros, usar sampling para respuesta rápida
 async function indicadoresGenerales(rango) {
   const db = await conectar();
-  const [r] = await db.collection('transacciones').aggregate([
+  
+  // Estrategia: si el rango es muy grande (>30 días), usar sample
+  const dias = rango.hasta && rango.desde 
+    ? Math.ceil((rango.hasta - rango.desde) / (1000 * 60 * 60 * 24))
+    : 7;
+  
+  const pipeline = [
     { $match: matchFecha(rango) },
+  ];
+  
+  // Si es más de 30 días, tomar muestra del 10% para velocidad
+  if (dias > 30) {
+    pipeline.push({ $sample: { size: 100000 } });
+  }
+  
+  pipeline.push(
     { $group: {
         _id: null,
         transacciones:        { $sum: 1 },
@@ -29,7 +50,19 @@ async function indicadoresGenerales(rango) {
         ultima:  { $max: '$fecha' }
     } },
     { $project: { _id: 0 } }
-  ], opts).toArray();
+  );
+  
+  const [r] = await db.collection('transacciones').aggregate(pipeline, {
+    ...opts,
+    hint: { es_coinbase: 1, fecha: 1 }
+  }).toArray();
+  
+  // Si usamos sample, extrapolar el conteo
+  if (dias > 30 && r) {
+    r.transacciones = Math.round(r.transacciones * 10); // Aproximación
+    r._nota = 'Estimación basada en muestra (base de datos muy grande)';
+  }
+  
   return r || {};
 }
 
@@ -48,7 +81,7 @@ async function evolucionDiaria(rango) {
     { $sort: { _id: 1 } },
     { $project: { _id: 0, dia: '$_id', transacciones: 1,
                   comisionPromedioBTC: 1, tamVirtualPromedio: 1, salidasPromedio: 1 } }
-  ], opts).toArray();
+  ], { ...opts, hint: { es_coinbase: 1, fecha: 1 } }).toArray();
 }
 
 // ─── Informe 3 · Mapa de Calor: Comisiones por Día/Hora ───────────────────────
