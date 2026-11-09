@@ -5,8 +5,10 @@ import {
   Flame,
   Fish,
   Split,
-  AlertTriangle,
   PieChart,
+  BarChart3,
+  CalendarRange,
+  Blocks,
   BrainCircuit,
   Radio,
 } from 'lucide-react';
@@ -22,12 +24,14 @@ const SECTIONS = [
       { to: '/ballenas',     label: 'Ballenas',        Icon: Fish },
       { to: '/fragmentacion',label: 'Fragmentación',   Icon: Split },
       { to: '/concentracion',label: 'Concentración',   Icon: PieChart },
+      { to: '/distribucion', label: 'Distribución',    Icon: BarChart3 },
+      { to: '/mensual',      label: 'Comparación',     Icon: CalendarRange },
+      { to: '/bloques',      label: 'Top Bloques',     Icon: Blocks },
     ],
   },
   {
     label: 'Inteligencia',
     items: [
-      { to: '/atipicas',     label: 'Atípicas',        Icon: AlertTriangle },
       { to: '/nl',           label: 'Lenguaje Natural', Icon: BrainCircuit },
     ],
   },

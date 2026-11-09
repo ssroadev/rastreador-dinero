@@ -4,7 +4,6 @@ const http       = require('http');
 const { Server } = require('socket.io');
 const informes   = require('./src/routes/informesRoutes');
 
-// ─── Express ──────────────────────────────────────────────────────────────────
 const app    = express();
 const server = http.createServer(app);
 
@@ -15,24 +14,24 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ─── Rutas ────────────────────────────────────────────────────────────────────
 app.get('/api/salud', (req, res) => res.json({ ok: true }));
 app.use('/api/informes', informes);
 
-// ─── Manejo de errores ────────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  const status = err.status || 500;
-  res.status(status).json({ error: status === 500 ? 'Error interno' : err.message });
+  const timeout = err.code === 50;
+  const status  = timeout ? 504 : (err.status || 500);
+  const msg = timeout
+    ? 'La consulta tardó demasiado. Reduce el rango de fechas e inténtalo de nuevo.'
+    : (status === 500 ? 'Error interno' : err.message);
+  res.status(status).json({ error: msg });
   if (status === 500) console.error(err);
 });
 
-// ─── Change Stream → Socket.IO ────────────────────────────────────────────────
-// Consumo mediante iterador async + bucle de reintentos (no-bloqueante).
+
 async function iniciarChangeStream() {
   const { abrirChangeStream } = require('./src/repositories/transaccionesRepository');
   let resumeToken = null;
 
-  // Ejecuta en background sin bloquear el arranque del servidor
   (async () => {
     for (;;) {
       let stream;

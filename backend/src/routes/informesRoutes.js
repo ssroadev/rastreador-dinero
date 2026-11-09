@@ -1,21 +1,24 @@
 const router = require('express').Router();
 const c = require('../controllers/informesController');
 
-// Informes convencionales
-router.get('/indicadores',    c.indicadores);    // Informe 1
-router.get('/evolucion',      c.evolucion);      // Informe 2
-router.get('/comisiones-hora',c.comisiones);     // Informe 3
-router.get('/ballenas',       c.ballenas);       // Informe 4 — histórico
-router.get('/ballenas/vivo',  c.ballenasVivo);   // Informe 4 — tiempo real
-router.get('/fragmentacion',  c.fragmentacion);   // Informe 5
-router.get('/atipicas',       c.atipicas);       // Informe 6
-router.get('/concentracion',  c.concentracion);   // Informe 7
-router.get('/distribucion',   c.distribucion);    // Distribución de montos
-router.get('/mensual',        c.mensual);         // Resumen mensual
-router.get('/top-bloques',    c.topBloques);      // Top bloques por comisiones
-router.get('/ultimas',        c.ultimas);        // Informe 10 (tiempo real / polling)
+// Informes sobre vistas pre-agregadas (rápidos)
+router.get('/indicadores',     c.indicadores);
+router.get('/evolucion',       c.evolucion);
+router.get('/comisiones-hora', c.comisiones);
+router.get('/mensual',         c.mensual);
+router.get('/top-bloques',     c.topBloques);
+router.get('/distribucion',    c.distribucion);
+
+// Informes sobre `transacciones` (ventana acotada + índices parciales)
+router.get('/ballenas',        c.ballenas);
+router.get('/ballenas/vivo',   c.ballenasVivo);
+router.get('/fragmentacion',   c.fragmentacion);
+router.get('/concentracion',   c.concentracion);
+
+// Tiempo real (mempool vivo)
+router.get('/ultimas',         c.ultimas);
 
 // Lenguaje natural (POST porque manda cuerpo)
-router.post('/nl',            c.consultaNL);     // Informes 8 y 9
+router.post('/nl',             c.consultaNL);
 
 module.exports = router;

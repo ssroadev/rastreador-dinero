@@ -5,13 +5,12 @@ import { getMensual } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader  from '../components/PageHeader';
-import { rangoPorDefecto } from '../utils/dates';
 import { tooltip, grid, xAxisCategory, yAxis, legend, COLORS } from '../charts/chartTheme';
 
 const fmt = (n, d = 4) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d });
 
 export default function Mensual() {
-  const [filtro, setFiltro]   = useState(rangoPorDefecto());
+  const [filtro, setFiltro]   = useState({ desde: '', hasta: '' })   // sin rango = todos los meses;
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

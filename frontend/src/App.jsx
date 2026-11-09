@@ -5,7 +5,9 @@ import Evolucion    from './pages/Evolucion';
 import ComisionesHora from './pages/ComisionesHora';
 import Ballenas     from './pages/Ballenas';
 import Fragmentacion from './pages/Fragmentacion';
-import Atipicas     from './pages/Atipicas';
+import Distribucion from './pages/Distribucion';
+import Mensual      from './pages/Mensual';
+import TopBloques   from './pages/TopBloques';
 import Concentracion from './pages/Concentracion';
 import ConsultaNL   from './pages/ConsultaNL';
 import TiempoReal   from './pages/TiempoReal';
@@ -49,7 +51,9 @@ export default function App() {
             <Route path="/comisiones"   element={<ComisionesHora />} />
             <Route path="/ballenas"      element={<Ballenas />} />
             <Route path="/fragmentacion" element={<Fragmentacion />} />
-            <Route path="/atipicas"      element={<Atipicas />} />
+            <Route path="/distribucion"  element={<Distribucion />} />
+            <Route path="/mensual"       element={<Mensual />} />
+            <Route path="/bloques"       element={<TopBloques />} />
             <Route path="/concentracion" element={<Concentracion />} />
             <Route path="/nl"           element={<ConsultaNL />} />
             <Route path="/tiempo-real"  element={<TiempoReal />} />

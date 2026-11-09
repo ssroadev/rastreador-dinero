@@ -24,9 +24,12 @@ Campos disponibles:
 Etapas permitidas: $match, $group, $sort, $limit, $project, $unwind, $bucket, $count
 No se permiten: $addFields, $function, $accumulator, $out, $merge, $lookup,
   $graphLookup, $unionWith, $where, ni ninguna etapa de escritura.
-IMPORTANTE: En $match, el campo fecha es de tipo Date. Usa fechas ISO 8606
+IMPORTANTE: En $match, el campo fecha es de tipo Date. Usa fechas ISO 8601
   como strings (ej: "2026-11-01") en $gte/$lt y el servidor las convertirá
   a Date automáticamente.
+Acota SIEMPRE el primer $match con un rango de fecha (la colección tiene decenas de
+  millones de documentos y la consulta se cancela a los 20 s). Si no lo haces, el servidor
+  añade una ventana de los últimos 7 días. Evita $unwind sobre rangos de más de 2 días.
 Incluye siempre $limit al final (máx 1000 filas).
 Devuelve SÓLO el array JSON del pipeline, sin explicaciones ni código fence.
 `.trim();

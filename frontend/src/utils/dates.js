@@ -16,3 +16,11 @@ export function rangoPorDefecto() {
     hasta: formatear(hasta),
   };
 }
+
+/**
+ * Rango de 1 día para informes pesados (Concentración).
+ * El backend limita ese informe a 2 días como máximo.
+ */
+export function rangoUnDia() {
+  return { desde: '2026-11-07', hasta: '2026-11-08' };
+}

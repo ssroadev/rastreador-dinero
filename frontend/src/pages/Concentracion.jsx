@@ -5,14 +5,14 @@ import { getConcentracion } from '../services/api';
 import RangoFechas from '../components/RangoFechas';
 import ErrorBanner from '../components/ErrorBanner';
 import PageHeader from '../components/PageHeader';
-import { rangoPorDefecto } from '../utils/dates';
+import { rangoUnDia } from '../utils/dates';
 import { tooltip, COLORS } from '../charts/chartTheme';
 
 const fmt      = (n, d = 4) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d });
 const truncate = (s, n = 16) => s ? (s.length > n ? s.slice(0, n) + '…' : s) : '—';
 
 export default function Concentracion() {
-  const [filtro, setFiltro]   = useState(rangoPorDefecto());
+  const [filtro, setFiltro]   = useState(rangoUnDia());
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);

@@ -23,6 +23,19 @@ function rango(req) {
   return { desde, hasta };
 }
 
+// Para informes que leen la colección grande: exige desde/hasta y limita los días.
+function rangoMax(req, maxDias) {
+  const r = rango(req);
+  if (!r.desde || !r.hasta) {
+    const e = new Error("Indica 'desde' y 'hasta' para este informe"); e.status = 400; throw e;
+  }
+  const dias = (r.hasta - r.desde) / 864e5;
+  if (dias > maxDias) {
+    const e = new Error(`Este informe admite como máximo ${maxDias} día(s) de rango`); e.status = 400; throw e;
+  }
+  return r;
+}
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 const indicadores  = async (req, res, next) => {
   try { res.json(await service.indicadores(rango(req)));  } catch (e) { next(e); }
@@ -39,7 +52,10 @@ const comisiones   = async (req, res, next) => {
 const ballenas     = async (req, res, next) => {
   try {
     const minBtc = parseFloat(req.query.minBtc) || 10;
-    res.json(await service.ballenas(rango(req), minBtc));
+    if (minBtc < 1) {
+      const e = new Error("'minBtc' debe ser al menos 1 (índice parcial de ballenas)"); e.status = 400; throw e;
+    }
+    res.json(await service.ballenas(rangoMax(req, 31), minBtc));
   } catch (e) { next(e); }
 };
 
@@ -55,15 +71,11 @@ const ballenasVivo = async (req, res, next) => {
 };
 
 const fragmentacion = async (req, res, next) => {
-  try { res.json(await service.fragmentacion(rango(req))); } catch (e) { next(e); }
-};
-
-const atipicas     = async (req, res, next) => {
-  try { res.json(await service.atipicas(rango(req)));     } catch (e) { next(e); }
+  try { res.json(await service.fragmentacion(rangoMax(req, 7))); } catch (e) { next(e); }
 };
 
 const concentracion = async (req, res, next) => {
-  try { res.json(await service.concentracion(rango(req))); } catch (e) { next(e); }
+  try { res.json(await service.concentracion(rangoMax(req, 2))); } catch (e) { next(e); }
 };
 
 const distribucion = async (req, res, next) => {
@@ -114,6 +126,6 @@ const consultaNL   = async (req, res, next) => {
 module.exports = {
   indicadores, evolucion, comisiones,
   ballenas, ballenasVivo, fragmentacion,
-  atipicas, concentracion, distribucion,
+  concentracion, distribucion,
   mensual, topBloques, ultimas, consultaNL,
 };
