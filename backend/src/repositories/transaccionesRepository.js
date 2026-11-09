@@ -204,11 +204,15 @@ async function ultimasTransacciones({ limite = 20 } = {}) {
 }
 
 // ─── Change Stream helper (usado por socket.io en app.js) ─────────────────────
-async function abrirChangeStream() {
+async function abrirChangeStream(resumeAfter) {
   const db = await conectar();
+  const options = { fullDocument: 'updateLookup' };
+  // Al reabrir el stream tras un error, reanudamos desde el último evento visto
+  // para no perder ni duplicar transacciones.
+  if (resumeAfter) options.resumeAfter = resumeAfter;
   return db.collection('transacciones').watch(
     [{ $match: { operationType: { $in: ['insert', 'update'] } } }],
-    { fullDocument: 'updateLookup' }
+    options
   );
 }
 
