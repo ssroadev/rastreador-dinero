@@ -27,11 +27,10 @@
   --purple:       #8b5cf6;
   --yellow:       #f59e0b;
 
-  /* Typography */
-  --text-primary:   #e6edf3;
-  --text-secondary: #7d8fa3;
-  --text-tertiary:  #4a5e73;
-  --text-mono:      #adbac7;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #a3b2c3;
+  --text-tertiary:  #8193a8;
+  --text-mono:      #cbd5e1;
 
   /* Chart colors (ordered by use-frequency) */
   --c1: #f7931a;
@@ -58,7 +57,7 @@ body {
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }

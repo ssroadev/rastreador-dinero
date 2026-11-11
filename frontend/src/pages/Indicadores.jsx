@@ -9,7 +9,7 @@ import { rangoPorDefecto } from '../utils/dates';
 /* ── Formato ──────────────────────────────────────────────────────────────────── */
 const fmtInt  = (n) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 });
 const fmtBTC  = (n, d = 8) => Number(n ?? 0).toLocaleString('es-CO', { maximumFractionDigits: d, minimumFractionDigits: d });
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'}) : '—';
 
 /* ── KPI card ─────────────────────────────────────────────────────────────────── */
 function KpiCard({ label, value, unit, sub, accent }) {
@@ -122,13 +122,15 @@ export default function Indicadores() {
               sub="recaudado por mineros"
               accent="var(--green)"
             />
-            <KpiCard
-              label="Comisión Promedio"
-              value={fmtBTC(data.comisionPromedioBTC, 8)}
-              unit="BTC"
-              sub="por transacción"
-              accent="var(--yellow)"
-            />
+
+          <KpiCard
+            label="Comisión promedio"
+            value={fmtInt(data.comisionPromedioBTC * 100_000_000)}
+            unit="sat/tx"
+            sub="Comisión media por transacción"
+            accent="var(--yellow)"
+          />
+
           </div>
 
           {/* Detail cards */}

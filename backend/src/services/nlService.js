@@ -1,14 +1,3 @@
-/**
- * Servicio de Lenguaje Natural: pregunta (texto) → { coleccion, pipeline }.
- *
- * Varios proveedores en cascada (LLM_PROVIDERS=gemini,ollama): se prueba el primero y, si falla
- * (límite 429, red, timeout, clave inválida o respuesta que no es JSON), pasa al siguiente.
- * Todos usan la API compatible con OpenAI, así que se cambia solo con variables de entorno.
- *   gemini → nivel gratuito con límites · groq → ídem · ollama → local, sin límites · openai → de pago
- * Para modelos locales pequeños se usa un prompt COMPACTO (menos ejemplos = menos tiempo en CPU).
- */
-
-
 const EJEMPLOS = (c) => [
 `Pregunta: ¿Cuáles son los 5 días con más transacciones?
 {"coleccion":"vw_diarias","pipeline":[{"$sort":{"tx":-1}},{"$limit":5},{"$project":{"_id":0,"dia":"$_id","transacciones":"$tx"}}]}`,
@@ -22,11 +11,17 @@ const EJEMPLOS = (c) => [
 {"coleccion":"transacciones","pipeline":[{"$match":{"fecha":{"$gte":"${c.ultima}","$lt":"${c.siguiente}"},"n_outputs":{"$gt":5}}},{"$count":"transacciones"},{"$limit":1}]}`,
 `Pregunta: ¿Cuáles son las 10 transacciones de mayor monto del último día?
 {"coleccion":"transacciones","pipeline":[{"$match":{"fecha":{"$gte":"${c.ultima}","$lt":"${c.siguiente}"},"es_coinbase":false}},{"$sort":{"total_salida":-1}},{"$limit":10},{"$project":{"_id":0,"txid":1,"fecha":1,"total_salida":1,"comision":1}}]}`,
+`Pregunta: ¿Cuál fue el promedio de salidas por transacción en cada día registrado?
+{"coleccion":"vw_diarias","pipeline":[{"$sort":{"fecha":1}},{"$project":{"_id":0,"dia":"$_id","promedioSalidas":{"$round":[{"$divide":["$salidas","$tx"]},2]}}},{"$limit":1000}]}`,
+`Pregunta: ¿Cuáles son los 10 bloques con mayor tamaño virtual y cuántas transacciones contiene cada uno?
+{"coleccion":"vw_bloques","pipeline":[{"$sort":{"tam":-1}},{"$limit":10},{"$project":{"_id":0,"bloque":"$_id","tamanoVirtualBytes":"$tam","transacciones":"$tx"}}]}`,
+`Pregunta: ¿Cómo se distribuyen las transacciones por cantidad de salidas el último día?
+{"coleccion":"vw_salidas","pipeline":[{"$match":{"fecha":{"$gte":"${c.ultima}","$lt":"${c.siguiente}"}}},{"$group":{"_id":"$rango","transacciones":{"$sum":"$tx"},"orden":{"$first":"$orden"}}},{"$sort":{"orden":1}},{"$project":{"_id":0,"rangoSalidas":"$_id","transacciones":1}},{"$limit":1000}]}`,
 ];
-// Compacto: 1 ejemplo por colección principal (vw_diarias, vw_horas, transacciones)
+
 const ejemplosPara = (c, compacto) => {
   const todos = EJEMPLOS(c);
-  const sel = compacto ? [0, 3, 4] : todos.map((_, i) => i);
+  const sel = compacto ? [0, 3, 4, 6] : todos.map((_, i) => i);
   return 'EJEMPLOS\n' + sel.map((i) => todos[i]).join('\n\n') + '\n';
 };
 
@@ -55,7 +50,16 @@ la pregunta sea sobre totales/promedios por día, hora, bloque o rango de salida
 REGLAS
 - Etapas permitidas: $match, $group, $sort, $limit, $project, $unwind, $bucket, $count, $addFields, $set.
   PROHIBIDO: $function, $accumulator, $where, $out, $merge, $lookup, $graphLookup, $unionWith y cualquier escritura.
-- Fechas como strings ISO "YYYY-MM-DD" dentro de $match sobre "fecha" (el servidor las convierte a Date).
+- El campo fecha es BSON Date en TODAS las colecciones. En la salida JSON, escribe las fechas
+  del $match como cadenas ISO "YYYY-MM-DD" o "YYYY-MM-DDTHH:mm:ssZ": el backend las convierte
+  a Date ANTES de enviarlas a MongoDB. NO compares fechas como strings sin conversión.
+- Al filtrar un día UTC usa fecha >= día y fecha < día siguiente. Si la pregunta exige una
+  fecha LOCAL de Bogotá (UTC-5), desplaza los límites cinco horas: díaT05:00:00Z y
+  díaSiguienteT05:00:00Z. Para agrupar horas locales, usa timezone "America/Bogota".
+- Para vw_salidas, usa el campo "rango", agrupa con {$sum:"$tx"}; NO existe un documento
+  por transacción en esa colección. Para vw_horas utiliza "tx" (no "transacciones").
+- Para promedios a partir de vw_diarias: salidas/tx, comision/tx, volumen/tx.
+- No confundas "tam" (suma de bytes virtuales) con comisiones ni "sumTasa" con volumen.
 - En "transacciones" el PRIMER $match debe acotar "fecha" con $gte y $lt, y evita $unwind en rangos > 2 días.
 - Termina SIEMPRE con $limit (máx. 1000). Da nombres de campo legibles en $project (sin _id).
 - Responde SOLO un objeto JSON: {"coleccion":"<nombre>","pipeline":[...]}. Sin explicaciones ni code fences.
@@ -114,7 +118,6 @@ async function pedir(client, params) {
   try {
     return await client.chat.completions.create({ ...params, response_format: { type: 'json_object' } });
   } catch (e) {
-    // Algunos modelos/proveedores no soportan response_format → reintenta sin él
     if (e.status === 400) return client.chat.completions.create(params);
     throw e;
   }
@@ -139,7 +142,7 @@ async function intentar(p, pregunta, ctx, repara) {
     messages.push({ role: 'user', content:
       `Ese pipeline falló: ${repara.error}\nCorrígelo y responde de nuevo SOLO con el JSON {"coleccion":...,"pipeline":[...]}.` });
   }
-  const completion = await pedir(client, { model: p.model, temperature: 0, max_tokens: 800, messages });
+  const completion = await pedir(client, { model: p.model, temperature: 0, max_tokens: 1600, messages });
   const raw = completion.choices?.[0]?.message?.content ?? '';
 
   let obj;
@@ -172,13 +175,25 @@ async function generar(pregunta, ctx, repara) {
     try {
       const r = await intentar(p, pregunta, ctx, repara);
       return { ...r, proveedor: p.nombre, modelo: p.model, fallos };
-    } catch (e) {
+    } catch (primerError) {
+
+      let e = primerError;
+      if (e.status === 422) {
+        try {
+          const r = await intentar(p, pregunta, ctx, {
+            anterior: String(e.raw || '').slice(0, 2400),
+            error: 'La respuesta anterior no fue JSON válido. Devuelve únicamente un objeto JSON completo con coleccion y pipeline. No añadas texto ni bloques Markdown.',
+          });
+          return { ...r, proveedor: p.nombre, modelo: p.model, fallos };
+        } catch (segundoError) {
+          e = segundoError;
+        }
+      }
       primero ??= e;
       fallos.push({ proveedor: p.nombre, motivo: describirFallo(e) });
       console.warn(`⚠ NL: ${p.nombre} falló (${describirFallo(e)})${lista.length > 1 ? ' → probando el siguiente' : ''}`);
     }
   }
-  // Todos fallaron: error del primero, con mensaje claro
   if (primero.status === 429) throw error('Se alcanzó el límite de peticiones de la IA y no hay respaldo disponible. Espera un minuto.', 429);
   if (primero.status === 422) throw primero;
   throw error(`No se pudo obtener respuesta de la IA (${fallos.map((f) => `${f.proveedor}: ${f.motivo}`).join('; ')})`, 502);

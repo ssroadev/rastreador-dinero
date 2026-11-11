@@ -12,14 +12,23 @@ function fecha(v, nombre) {
   return d;
 }
 
+
 function rango(req) {
   const desde = fecha(req.query.desde, 'desde');
-  const hasta = fecha(req.query.hasta, 'hasta');
-  if (desde && hasta && desde >= hasta) {
-    const e = new Error("'desde' debe ser anterior a 'hasta'");
+  const hastaSeleccionado = fecha(req.query.hasta, 'hasta');
+
+  if (desde && hastaSeleccionado && desde > hastaSeleccionado) {
+    const e = new Error("'desde' no puede ser posterior a 'hasta'");
     e.status = 400;
     throw e;
   }
+
+  // Incluir todo el día seleccionado como fecha final.
+  // MongoDB seguirá utilizando $lt para el límite exclusivo.
+  const hasta = hastaSeleccionado
+    ? new Date(hastaSeleccionado.getTime() + 86400000)
+    : undefined;
+
   return { desde, hasta };
 }
 
