@@ -180,9 +180,9 @@ async function ballenasRecientes(limite = 50, minBtc = 10) {
 // ─── Fragmentación (pocas entradas, muchas salidas casi iguales) ──────────────
 // Usa idx_fragmentacion_fecha ({fecha:1}, n_outputs >= 10).
 // Sin $unwind/$group: $avg y $stdDevPop operan directamente sobre el arreglo.
-async function fragmentacion(rango) {
+async function fragmentacionEnVivo(rango) {
   const db = await conectar();
-  return db.collection('transacciones').aggregate([
+  return conHint(db.collection('transacciones'), [
     { $match: { ...matchFecha(rango), n_inputs: { $lte: 2 }, n_outputs: { $gte: 10 } } },
     { $addFields: {
         valorMedio:  { $avg:       '$outputs.valor' },
@@ -199,14 +199,14 @@ async function fragmentacion(rango) {
         valorMedio:    { $round: ['$valorMedio', 8] },
         coefVariacion: { $round: ['$coefVariacion', 4] },
     } },
-  ], opts).toArray();
+  ], 'idx_fragmentacion_fecha');
 }
 
 // ─── Concentración por dirección ──────────────────────────────────────────────
 // Dos pasadas (el controlador limita la ventana a 2 días):
 //   1) cuántas direcciones distintas hay y cuánto volumen total
 //   2) top 500 + suma exacta del 1 % y del 10 % de las direcciones (por volumen recibido)
-async function concentracionDireccion(rango) {
+async function concentracionEnVivo(rango) {
   const db  = await conectar();
   const col = db.collection('transacciones');
   const porDireccion = [
@@ -256,86 +256,75 @@ async function concentracionDireccion(rango) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  Lenguaje natural: validación del pipeline generado por la IA
+//  Fragmentación y Concentración: leen colecciones PRE-CALCULADAS por día
+//  (vw_fragmentacion, vw_concentracion). Se llenan con
+//  `node scripts/pre-agregar-frag-conc.js` reutilizando las funciones "EnVivo".
+//  Si el rango pedido aún no está pre-calculado, se calcula en vivo (lento) solo
+//  cuando el rango es corto; si no, se pide ejecutar el script.
 // ═════════════════════════════════════════════════════════════════════════════
-const ETAPAS_PERMITIDAS = new Set([
-  '$match', '$group', '$sort', '$limit', '$project', '$unwind', '$bucket', '$count',
-]);
-const OPERADORES_PELIGROSOS = new Set([
-  '$function', '$accumulator', '$where', '$merge', '$out',
-  '$lookup', '$graphLookup', '$unionWith',
-]);
-const OPS_COMPARACION = new Set(['$gte', '$gt', '$lt', '$lte', '$eq', '$ne']);
-const LIMIT_MAX_NL = 1000;
-const VENTANA_NL_DIAS = 7;                       // ventana por defecto si la IA no acota fecha
-const optsNL = { maxTimeMS: 20000, allowDiskUse: true };
+const MAX_DIAS_EN_VIVO = { fragmentacion: 7, concentracion: 2 };
 
-function bad(msg, status = 400) { const e = new Error(msg); e.status = status; return e; }
-
-function contieneOperadorPeligroso(valor) {
-  if (valor === null || typeof valor !== 'object') return false;
-  if (Array.isArray(valor)) return valor.some(contieneOperadorPeligroso);
-  for (const [clave, v] of Object.entries(valor)) {
-    if (OPERADORES_PELIGROSOS.has(clave)) return true;
-    if (contieneOperadorPeligroso(v)) return true;
+async function diasEsperados(db, rango) {
+  return db.collection('vw_diarias').countDocuments(filtroVw(rango));
+}
+async function diasPrecalculados(db, tipo, rango) {
+  return db.collection('vw_precalculo').countDocuments({ tipo, ...filtroVw(rango) });
+}
+function sinPrecalculo(tipo, rango) {
+  const dias = rango.desde && rango.hasta ? (rango.hasta - rango.desde) / 864e5 : Infinity;
+  if (dias > MAX_DIAS_EN_VIVO[tipo]) {
+    const e = new Error(
+      `Rango no pre-calculado para ${tipo}. Ejecuta "node scripts/pre-agregar-frag-conc.js" ` +
+      `o reduce el rango a ${MAX_DIAS_EN_VIVO[tipo]} día(s).`);
+    e.status = 400;
+    throw e;
   }
-  return false;
 }
 
-function convertirFechas(obj) {
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) { obj.forEach(convertirFechas); return obj; }
-  for (const [k, v] of Object.entries(obj)) {
-    if (k === 'fecha') {
-      if (typeof v === 'string') obj[k] = new Date(v);
-      else if (v && typeof v === 'object' && !Array.isArray(v)) {
-        for (const [op, val] of Object.entries(v))
-          if (OPS_COMPARACION.has(op) && typeof val === 'string') v[op] = new Date(val);
-      }
-    } else convertirFechas(v);
+// ─── Informe · Fragmentación (top 100 del rango, instantáneo) ─────────────────
+async function fragmentacion(rango) {
+  const db = await conectar();
+  const esperados = await diasEsperados(db, rango);
+  if (esperados === 0 || (await diasPrecalculados(db, 'fragmentacion', rango)) < esperados) {
+    sinPrecalculo('fragmentacion', rango);
+    return fragmentacionEnVivo(rango);
   }
-  return obj;
+  // El top-100 global es el top-100 de la unión de los top-100 diarios (resultado exacto).
+  return db.collection('vw_fragmentacion').aggregate([
+    { $match: filtroVw(rango) },
+    { $sort: { n_outputs: -1, total_salida: -1 } },
+    { $limit: 100 },
+    { $project: { _id: 0, dia: 0 } },
+  ], opts).toArray();
 }
 
-// El ÚLTIMO stage siempre es $limit ≤ LIMIT_MAX_NL (también se acotan los intermedios).
-function forzarLimit(pipeline) {
-  for (const etapa of pipeline)
-    if (typeof etapa.$limit === 'number' && etapa.$limit > LIMIT_MAX_NL) etapa.$limit = LIMIT_MAX_NL;
-  const ult = pipeline[pipeline.length - 1];
-  if (typeof ult.$limit !== 'number') pipeline.push({ $limit: LIMIT_MAX_NL });
-  return pipeline;
+// ─── Informe · Concentración por dirección ────────────────────────────────────
+// Devuelve el último día del rango (mismo formato de antes) + `serie` con la
+// evolución diaria de pctTop1 / pctTop10 para todo el rango.
+async function concentracionDireccion(rango) {
+  const db = await conectar();
+  const esperados = await diasEsperados(db, rango);
+  if (esperados === 0 || (await diasPrecalculados(db, 'concentracion', rango)) < esperados) {
+    sinPrecalculo('concentracion', rango);
+    return concentracionEnVivo(rango);
+  }
+  const col = db.collection('vw_concentracion');
+  const [ultimo] = await col.find(filtroVw(rango)).sort({ fecha: -1 }).limit(1).toArray();
+  if (!ultimo) return { totalDirecciones: 0, volumenTotal: 0, pctTop1: 0, pctTop10: 0, top: [], serie: [] };
+  const serie = await col.find(filtroVw(rango), {
+    projection: { _id: 0, fecha: 1, totalDirecciones: 1, volumenTotal: 1, pctTop1: 1, pctTop10: 1 },
+  }).sort({ fecha: 1 }).toArray();
+  const { _id, ...resto } = ultimo;
+  return { ...resto, diaMostrado: _id, serie };
 }
 
-// Si el primer $match no acota `fecha`, se antepone una ventana (evita escanear toda la colección).
-function asegurarVentana(pipeline) {
-  const primero = pipeline[0]?.$match;
-  const acota = primero && JSON.stringify(primero).includes('"fecha"');
-  if (!acota) {
-    const desde = new Date(Date.now() - VENTANA_NL_DIAS * 864e5);
-    pipeline.unshift({ $match: { fecha: { $gte: desde } } });
+async function conHint(col, pipeline, hint) {
+  try {
+    return await col.aggregate(pipeline, { ...opts, hint }).toArray();
+  } catch (e) {
+    if (/hint/i.test(e.message || '')) return col.aggregate(pipeline, opts).toArray(); // el índice no existe
+    throw e;
   }
-  return pipeline;
-}
-
-async function ejecutarPipelineNL(pipeline) {
-  if (!Array.isArray(pipeline) || pipeline.length === 0) throw bad('El pipeline debe ser un array no vacío');
-  if (pipeline.length > 10) throw bad('Pipeline demasiado largo (máx. 10 etapas)');
-
-  for (const etapa of pipeline) {
-    if (!etapa || typeof etapa !== 'object' || Array.isArray(etapa)) throw bad('Cada etapa debe ser un objeto');
-    const claves = Object.keys(etapa);
-    if (claves.length !== 1 || !claves[0].startsWith('$')) throw bad('Etapa inválida: debe tener una sola clave con prefijo $');
-    if (!ETAPAS_PERMITIDAS.has(claves[0])) throw bad(`Etapa no permitida: ${claves[0]}`);
-  }
-  if (contieneOperadorPeligroso(pipeline)) throw bad('Pipeline rechazado: contiene operadores no permitidos', 403);
-
-  for (const etapa of pipeline) if (etapa.$match) convertirFechas(etapa.$match);
-  asegurarVentana(pipeline);
-  forzarLimit(pipeline);
-
-  const { conectarLectura } = require('../config/db');
-  const db = await conectarLectura();
-  return db.collection('transacciones').aggregate(pipeline, optsNL).toArray();
 }
 
 // ─── Informe 10 · Últimas transacciones (mempool vivo) ────────────────────────
@@ -360,9 +349,96 @@ async function abrirChangeStream(resumeAfter) {
   );
 }
 
+// ─── Lenguaje Natural (NL) ─────────────────────────────────────────────────────
+/**
+ * Contexto de datos para el servicio NL: fechas disponibles, etc.
+ */
+async function contextoDatos() {
+  const db = await conectar();
+  const [r] = await db.collection('vw_diarias').aggregate([
+    { $group: {
+        _id: null,
+        primera: { $min: '$fecha' },
+        ultima:  { $max: '$fecha' },
+    } },
+  ], opts).toArray();
+  
+  if (!r) {
+    throw new Error('No hay datos disponibles para generar contexto');
+  }
+  
+  const primera = r.primera.toISOString().split('T')[0];
+  const ultima = r.ultima.toISOString().split('T')[0];
+  const siguiente = new Date(r.ultima);
+  siguiente.setDate(siguiente.getDate() + 1);
+  
+  return {
+    hoy: new Date().toISOString().split('T')[0],
+    primera,
+    ultima,
+    siguiente: siguiente.toISOString().split('T')[0],
+  };
+}
+
+/**
+ * Ejecuta un pipeline generado por IA. Valida que sea de solo lectura.
+ * @param {object} params - { coleccion, pipeline }
+ */
+async function ejecutarPipelineNL({ coleccion, pipeline }) {
+  // Validación básica
+  if (!coleccion || !Array.isArray(pipeline)) {
+    const e = new Error('Se requiere {coleccion, pipeline}');
+    e.status = 400;
+    throw e;
+  }
+  
+  // Colecciones permitidas
+  const permitidas = ['vw_diarias', 'vw_horas', 'vw_bloques', 'vw_salidas', 'transacciones'];
+  if (!permitidas.includes(coleccion)) {
+    const e = new Error(`Colección no permitida: ${coleccion}`);
+    e.status = 400;
+    throw e;
+  }
+  
+  // Validar que sean etapas de solo lectura
+  const etapasEscritura = ['$out', '$merge', '$function', '$accumulator', '$where', 
+                          '$lookup', '$graphLookup', '$unionWith'];
+  for (const etapa of pipeline) {
+    const nombre = Object.keys(etapa)[0];
+    if (etapasEscritura.includes(nombre)) {
+      const e = new Error(`Etapa prohibida en pipeline: ${nombre}`);
+      e.status = 403;
+      throw e;
+    }
+  }
+  
+  // Agregar límite de seguridad si no existe
+  const tieneLimit = pipeline.some(etapa => '$limit' in etapa);
+  if (!tieneLimit) {
+    pipeline.push({ $limit: 1000 });
+  }
+  
+  // Ejecutar
+  const db = await conectar();
+  try {
+    return await db.collection(coleccion).aggregate(pipeline, opts).toArray();
+  } catch (error) {
+    // Errores comunes de MongoDB con mejor mensaje
+    if (error.code === 2) {
+      throw new Error(`Campo no encontrado: ${error.message}`);
+    }
+    if (error.code === 16552) {
+      throw new Error('Pipeline inválido: límite de memoria excedido');
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   indicadoresGenerales, evolucionDiaria, comisionesPorHora,
   resumenMensual, topBloquesPorComisiones, distribucionSalidas,
   ballenasHistoricas, ballenasRecientes, fragmentacion, concentracionDireccion,
-  ejecutarPipelineNL, ultimasTransacciones, abrirChangeStream,
+  fragmentacionEnVivo, concentracionEnVivo,
+  ultimasTransacciones, abrirChangeStream,
+  contextoDatos, ejecutarPipelineNL,
 };

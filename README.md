@@ -1,100 +1,86 @@
 # Rastro del Dinero — Bitcoin Analytics Dashboard
 
-Dashboard de análisis de transacciones Bitcoin sobre datos reales de AWS Public Blockchain Data.
+Dashboard de análisis de transacciones Bitcoin (AWS Public Blockchain Data) sobre MongoDB.
+Proyecto parcial de Bases de Datos II.
+
+## Caso de estudio
+- **Problema:** entender cómo se mueve el dinero en Bitcoin: actividad, comisiones, ballenas, fragmentación y concentración.
+- **Usuarios:** analistas, mineros y usuarios que quieren pagar menos comisión.
+- **Datos:** transacciones reales (`transacciones`, una fila por tx, con `inputs[]` y `outputs[]`) de 2026-09-21 a 2026-11-08.
+- **Decisiones:** cuándo enviar una tx para pagar menos, detectar patrones sospechosos, medir qué tan concentrada está la riqueza.
+- **Por qué es big data:** decenas de millones de documentos; sin índices ni pre-agregación los informes tardan minutos.
 
 ## Arquitectura
+```
+Dashboard (React + ECharts) ──HTTP/JSON──▶ API (Express) ──▶ MongoDB (replica set rs0)
+        ▲                                     │  routes → controllers → services → repositories
+        └──── Socket.IO ◀── Change Stream ◀───┘            ▲
+                                  ingesta/vivo.js (WebSocket blockchain.com) ──insert──▶ mempool_vivo (capped)
+```
+| Capa | Responsabilidad |
+|---|---|
+| `routes/` | Endpoints `/api/informes/*` |
+| `controllers/` | Validar y normalizar parámetros, manejo de errores HTTP |
+| `services/` | Lógica de negocio. `nlService` (IA → pipeline) y `informesService` (orquesta NL + reintento) |
+| `repositories/` | TODAS las consultas a MongoDB (`$match/$group/$sort` en el motor). `nlRepository` valida y ejecuta el pipeline de la IA en solo lectura |
+| `scripts/`, `etl/`, `database/` | Carga, índices, pre-agregación, benchmark |
 
-```
-rastro-del-dinero/
-├── backend/              Node.js + Express 5 + MongoDB (driver nativo)
-│   ├── src/
-│   │   ├── config/       Conexión MongoDB (singleton)
-│   │   ├── routes/       Definición de endpoints
-│   │   ├── controllers/  Validación de parámetros
-│   │   ├── services/     Lógica de negocio
-│   │   └── repositories/ Aggregation Pipelines
-│   ├── app.js            Express + Socket.IO
-│   └── server.js         Arranque + Change Stream
-│
-├── frontend/             React + Vite + ECharts + Socket.IO client
-│   └── src/
-│       ├── components/   Navbar, RangoFechas, ErrorBanner
-│       ├── pages/        Una página por informe
-│       ├── charts/       Tema y helpers de ECharts
-│       └── services/     api.js (axios) + socket.js
-│
-└── data/db/              MongoDB local (replica set rs0)
-```
+El dashboard solo habla con la API; nunca con la base de datos.
 
 ## Requisitos
+- Node.js **22+** (la ingesta usa `WebSocket` nativo), Docker, Python 3.11+ (ETL)
 
-- Node.js 20+
-- MongoDB con replica set (`replicaSet=rs0`) — necesario para Change Streams
+## Puesta en marcha
+```bash
+# 1. MongoDB como replica set (necesario para Change Streams)
+docker compose up -d
 
-## Configuración
+# 2. Datos (ETL: descarga Parquet de AWS y carga a MongoDB; reanudable)
+cd etl && pip install -r requirements.txt && python 05_tandas.py && cd ..
 
-### Backend
+# 3. Backend
+cd backend && cp .env.example .env      # editar MONGO_DB y la clave de IA (ver abajo)
+npm install
+node ../database/indexes/crear_indices_node.js   # índices base (idx_coinbase_fecha, idx_outputs_dir multikey…)
+npm run indices                          # índices parciales + borra los redundantes
+npm run vistas                           # vw_diarias / vw_horas / vw_bloques / vw_salidas
+npm run precalcular                      # vw_fragmentacion / vw_concentracion
+npm start                                # API en :3000 + Change Stream
 
-1. Copia / edita `backend/.env`:
-   ```env
-   PORT=3000
-   MONGO_URI=mongodb://localhost:27017/?replicaSet=rs0&directConnection=true
-   MONGO_DB=rastro
-   OPENAI_API_KEY=sk-...   # opcional, para informes de lenguaje natural
-   ```
+# 4. Tiempo real (otra terminal)
+cd backend && npm run ingesta            # blockchain.com → mempool_vivo → Change Stream → Socket.IO
 
-2. Instala dependencias:
-   ```bash
-   cd backend && npm install
-   ```
+# 5. Frontend
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
 
-3. Arranca:
-   ```bash
-   node server.js
-   ```
+### Lenguaje natural (gratis, con respaldo local)
+`LLM_PROVIDERS=gemini,ollama` en `backend/.env`: se usa Gemini (clave gratuita de Google AI Studio) y, si falla
+por límite, red o respuesta inválida, cae automáticamente a Ollama (local, sin límites, prompt compacto).
+La respuesta de `/api/informes/nl` indica `proveedor`, `modelo` y si se usó `respaldo`. Ver `.env.example`.
+Recomendado: crear un usuario de solo lectura (`node scripts/crear-usuario-lector.js <clave>`) y poner `MONGO_READONLY_URI`.
 
-### Frontend
+### Evidencia del volumen (≥ 20 GB)
+```js
+db.stats(1024*1024*1024)   // dataSize = datos · storageSize = disco · indexSize = índices (se reportan por separado)
+```
 
-1. Edita `frontend/.env` si el backend corre en otro puerto:
-   ```env
-   VITE_API_URL=http://localhost:3000/api
-   VITE_SOCKET_URL=http://localhost:3000
-   ```
+## Informes
+| # | Ruta | Pregunta | Fuente |
+|---|---|---|---|
+| 1 | `/` | ¿Cuál es el comportamiento general? | `vw_diarias` |
+| 2 | `/evolucion` | ¿Cómo cambió la actividad día a día? | `vw_diarias` |
+| 3 | `/comisiones` | ¿Cuándo conviene enviar una tx para pagar menos? | `vw_horas` |
+| 4 | `/bloques` | ¿Qué bloques dieron más comisión a los mineros? | `vw_bloques` |
+| 5 | `/distribucion` | ¿Cuántas salidas tienen las txs típicas? | `vw_salidas` |
+| 6 | `/mensual` | ¿Qué diferencias hay entre meses? | `vw_diarias` |
+| 7 | `/ballenas` | ¿Dónde se mueven los montos grandes? | `transacciones` + índice parcial |
+| 8 | `/fragmentacion` | ¿Qué txs reparten fondos en muchas salidas casi iguales? | `vw_fragmentacion` |
+| 9 | `/concentracion` | ¿Qué tan concentrado está el volumen en pocas direcciones? | `vw_concentracion` |
+| 10 | `/nl` | Preguntas libres en español (IA → pipeline MongoDB) | `vw_*` / `transacciones` |
+| 11 | `/tiempo-real` | ¿Qué está pasando ahora mismo? (Change Stream) | `mempool_vivo` |
 
-2. Instala dependencias:
-   ```bash
-   cd frontend && npm install
-   ```
+Cada informe documenta pregunta, consulta, visualización e interpretación en `docs/informes.md`.
 
-3. Modo desarrollo:
-   ```bash
-   npm run dev
-   # → http://localhost:5173
-   ```
-
-4. Build de producción:
-   ```bash
-   npm run build
-   npm run preview
-   ```
-
-## Informes implementados
-
-| # | Ruta | Pregunta |
-|---|------|----------|
-| 1 | `/` | ¿Cuál es el comportamiento general de los datos? |
-| 2 | `/evolucion` | ¿Cómo ha cambiado la actividad día a día? |
-| 3 | `/comisiones` | ¿Cuándo conviene enviar una tx para pagar menos? |
-| 4 | `/bloques` | ¿Qué bloques generaron más comisión para los mineros? |
-| 5 | `/distribucion` | ¿Cuántas salidas tienen las transacciones típicas? |
-| 6 | `/atipicas` | ¿Qué transacciones son sospechosas por volumen/comisión? |
-| 7 | `/mensual` | ¿Qué diferencias existen entre meses? |
-| 8+9 | `/nl` | Preguntas libres en lenguaje natural (IA → pipeline MongoDB) |
-| 10 | `/tiempo-real` | ¿Qué cambios están ocurriendo ahora mismo? (Change Stream) |
-
-## Tecnologías
-
-- **Base de datos**: MongoDB (replica set local) — colección `transacciones`
-- **Backend**: Express 5, mongodb driver, Socket.IO, OpenAI SDK
-- **Frontend**: React 18, Vite 5, Apache ECharts, Socket.IO client, Axios, React Router 6
-- **Tiempo real**: Change Streams → Socket.IO → React
+## Índices y optimización
+Ver `docs/benchmark_indices.md` (generado con `npm run benchmark`: explain `executionStats`, COLLSCAN vs IXSCAN).

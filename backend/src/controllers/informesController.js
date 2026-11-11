@@ -71,11 +71,11 @@ const ballenasVivo = async (req, res, next) => {
 };
 
 const fragmentacion = async (req, res, next) => {
-  try { res.json(await service.fragmentacion(rangoMax(req, 7))); } catch (e) { next(e); }
+  try { res.json(await service.fragmentacion(rangoMax(req, 90))); } catch (e) { next(e); }
 };
 
 const concentracion = async (req, res, next) => {
-  try { res.json(await service.concentracion(rangoMax(req, 2))); } catch (e) { next(e); }
+  try { res.json(await service.concentracion(rangoMax(req, 90))); } catch (e) { next(e); }
 };
 
 const distribucion = async (req, res, next) => {
@@ -103,23 +103,15 @@ const ultimas      = async (req, res, next) => {
 };
 
 // ─── Lenguaje Natural ─────────────────────────────────────────────────────────
-// El frontend manda { pregunta } — el backend llama a la IA para generar el
-// pipeline y lo valida antes de ejecutarlo. No se acepta pipeline del cliente.
-const consultaNL   = async (req, res, next) => {
+// El frontend manda { pregunta }. El servicio genera el pipeline con la IA, el repositorio
+// lo valida y lo ejecuta (solo lectura). Nunca se acepta un pipeline enviado por el cliente.
+const consultaNL = async (req, res, next) => {
   try {
-    const { pregunta } = req.body;
-
-    if (!pregunta || typeof pregunta !== 'string' || pregunta.trim().length < 3) {
-      const e = new Error("Se requiere 'pregunta' como texto"); e.status = 400; throw e;
+    const { pregunta } = req.body ?? {};
+    if (!pregunta || typeof pregunta !== 'string' || pregunta.trim().length < 3 || pregunta.length > 500) {
+      const e = new Error("Se requiere 'pregunta' como texto (3–500 caracteres)"); e.status = 400; throw e;
     }
-
-    // Genera pipeline con OpenAI a través del servicio de NL
-    const { generarPipeline } = require('../services/nlService');
-    const pipelineGenerado = await generarPipeline(pregunta.trim());
-
-    // El repositorio valida, sanitiza y ejecuta el pipeline
-    const resultado = await service.ejecutarNL(pipelineGenerado);
-    res.json({ pregunta: pregunta.trim(), pipeline: pipelineGenerado, resultado });
+    res.json(await service.consultaNL(pregunta.trim()));
   } catch (e) { next(e); }
 };
 

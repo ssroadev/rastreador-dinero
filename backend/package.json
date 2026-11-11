@@ -2,9 +2,15 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "ingesta": "node ingesta/vivo.js",
+    "indices": "node scripts/crear-indices-parciales.js --limpiar",
+    "vistas": "node scripts/pre-agregar-dia.js",
+    "precalcular": "node scripts/pre-agregar-frag-conc.js",
+    "benchmark": "node ../database/scripts/benchmark-indices.js",
+    "test": "echo \"sin pruebas\" && exit 0"
   },
   "keywords": [],
   "author": "",
@@ -17,5 +23,8 @@
     "mongodb": "^7.8.0",
     "openai": "4.103.0",
     "socket.io": "4.8.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
